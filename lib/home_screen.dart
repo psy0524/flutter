@@ -6,6 +6,7 @@ import 'package:untitled/page/checkList_page.dart';
 import 'package:untitled/page/riskAssessment_page.dart';
 import 'package:untitled/page/education_page.dart';
 import 'package:untitled/page/seriousAccidentNotification_page.dart';
+import 'main.dart'; // 로그인 페이지 임포트
 
 class HomeScreen extends StatelessWidget {
   final Map<String, dynamic> userData;
