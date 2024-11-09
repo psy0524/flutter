@@ -1,3 +1,5 @@
+// checklist_page.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -133,10 +135,12 @@ class _ChecklistPageState extends State<ChecklistPage> {
                     itemCount: checklistItems.length,
                     itemBuilder: (context, index) {
                       var checklist = checklistItems[index].data() as Map<String, dynamic>;
+                      var checklistId = checklistItems[index].id; // document ID 가져오기
                       return _buildChecklistItem(
                         checklist['checklist_nm'],
                         checklist['check_cycle_nm'],
                         checklist['check_yn'] == '점검됨',
+                        checklistId, // checklistId 전달
                       );
                     },
                   );
@@ -164,7 +168,7 @@ class _ChecklistPageState extends State<ChecklistPage> {
     );
   }
 
-  Widget _buildChecklistItem(String title, String cycle, bool inspection) {
+  Widget _buildChecklistItem(String title, String cycle, bool inspection, String checklistId) {
     return Card(
       color: Colors.grey.shade100,
       elevation: 2.0,
@@ -183,7 +187,11 @@ class _ChecklistPageState extends State<ChecklistPage> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => ChecklistDetailPage(title: title, inspection: inspection),
+              builder: (context) => ChecklistDetailPage(
+                title: title,
+                inspection: inspection,
+                checklistId: checklistId, // checklistId 전달
+              ),
             ),
           );
         },
