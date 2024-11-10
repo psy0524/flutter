@@ -26,6 +26,7 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
 
   // 각 항목마다 텍스트 필드를 관리할 컨트롤러를 선언
   Map<int, TextEditingController> _controllers = {};
+  Map<int, String> _checkDetails = {}; // 각 항목의 라디오 버튼 선택 상태를 관리
 
   Future<void> _pickImage() async {
     final XFile? pickedFile = await _picker.pickImage(source: ImageSource.camera);
@@ -62,6 +63,7 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
     // 각 항목마다 텍스트 필드를 관리할 컨트롤러 초기화
     for (var item in items) {
       _controllers[item.number] = TextEditingController(text: item.actnContents);
+      _checkDetails[item.number] = item.checkDetail; // 초기 선택 상태 저장
     }
 
     return items;
@@ -69,7 +71,6 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
 
   Future<void> _saveChecklistItem(ChecklistItem item) async {
     try {
-      // `check_seq - 1`을 사용하여 문서 ID로 저장
       await FirebaseFirestore.instance
           .collection('checklist')
           .doc(widget.checklistId)
@@ -80,10 +81,6 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
         'actn_contents': item.actnContents ?? '',
       });
 
-      // 성공적으로 저장된 후 메시지 출력
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('부적합 사유가 저장되었습니다.')),
-      );
     } catch (e) {
       print("문서 업데이트 실패: $e");
       ScaffoldMessenger.of(context).showSnackBar(
@@ -108,6 +105,11 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
         SnackBar(content: Text('점검 완료 업데이트 실패: $e')),
       );
     }
+  }
+
+  bool _isAllItemsChecked() {
+    // 모든 항목이 '적합' 또는 '부적합'으로 체크되었는지 확인
+    return _checkDetails.values.every((value) => value == '적합' || value == '부적합');
   }
 
   @override
@@ -216,16 +218,18 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
                               child: RadioListTile(
                                 title: Text(option),
                                 value: option,
-                                groupValue: item.checkDetail,
+                                groupValue: _checkDetails[item.number], // 현재 체크된 값 사용
                                 onChanged: (value) {
                                   setState(() {
-                                    item.checkDetail = value;
+                                    _checkDetails[item.number] = value.toString();
+                                    item.checkDetail = value.toString(); // 항목 업데이트
+                                    if (item.checkDetail == '부적합') {
+                                      item.actnContents = _controllers[item.number]!.text;
+                                    } else {
+                                      item.actnContents = ''; // '적합'일 경우 부적합 사유 비워두기
+                                    }
                                   });
-                                  // 라디오 버튼을 선택할 때마다 "부적합 사유가 저장되었습니다." 메시지가 출력되지 않도록 수정
-                                  if (item.checkDetail != '부적합') {
-                                    // 부적합이 아닌 경우 메시지 출력하지 않음
-                                    return;
-                                  }
+                                  _saveChecklistItem(item); // 선택한 값을 저장
                                 },
                               ),
                             );
@@ -265,13 +269,7 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
                                           right: 4,
                                           child: GestureDetector(
                                             onTap: () => _removeImage(index),
-                                            child: Container(
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                color: Colors.black.withOpacity(0.5),
-                                              ),
-                                              child: Icon(Icons.close, color: Colors.white, size: 20),
-                                            ),
+                                            child: Icon(Icons.remove_circle, color: Colors.red, size: 24),
                                           ),
                                         ),
                                       ],
@@ -282,40 +280,22 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
                             ),
                           ],
                         ),
-                        if (item.checkDetail == '부적합')
-                          Column(
-                            children: [
-                              TextField(
-                                controller: _controllers[item.number],
-                                decoration: InputDecoration(
-                                  hintText: '부적합 사유를 작성해주세요.',
-                                  border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.all(8.0),
-                                ),
-                                onChanged: (value) {
-                                  setState(() {
-                                    item.actnContents = value;
-                                  });
-                                },
-                              ),
-                              SizedBox(height: 8),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.blueAccent,
-                                  foregroundColor: Colors.white,
-                                  padding: EdgeInsets.symmetric(vertical: 12.0, horizontal: 24.0),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12.0),
-                                  ),
-                                  elevation: 5,
-                                ),
-                                onPressed: () {
-                                  _saveChecklistItem(item);
-                                },
-                                child: Text('부적합 사유 저장'),
-                              ),
-                            ],
+                        SizedBox(height: 8),
+                        if (_checkDetails[item.number] == '부적합')
+                          TextField(
+                            controller: _controllers[item.number],
+                            decoration: InputDecoration(
+                              labelText: '부적합 사유', // 라벨 텍스트
+                              hintText: '부적합 사유를 입력하세요', // 힌트 텍스트 추가
+                            ),
+                            onChanged: (value) {
+                              setState(() {
+                                item.actnContents = value;
+                              });
+                              _saveChecklistItem(item); // 부적합 사유 업데이트
+                            },
                           ),
+                        SizedBox(height: 8),
                       ],
                     ),
                   ),
@@ -337,7 +317,15 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
               borderRadius: BorderRadius.circular(8.0),
             ),
           ),
-          onPressed: _completeInspection,
+          onPressed: () {
+            if (_isAllItemsChecked()) {
+              _completeInspection();
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('모든 항목을 체크해 주세요.')),
+              );
+            }
+          },
           child: Text('점검 완료', style: TextStyle(fontSize: 18)),
         ),
       )
@@ -349,15 +337,14 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
 class ChecklistItem {
   final int number;
   final String question;
-  final List<String> options;
-  String? checkDetail;
+  String checkDetail;
   String? actnContents;
+  List<String> options = ['적합', '부적합'];
 
   ChecklistItem({
     required this.number,
     required this.question,
-    this.options = const ['적합', '부적합'],
-    this.checkDetail,
+    required this.checkDetail,
     this.actnContents,
   });
 }
