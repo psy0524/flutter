@@ -7,12 +7,12 @@ import 'package:intl/intl.dart';
 class ChecklistDetailPage extends StatefulWidget {
   final String title;
   final bool inspection;
-  final String checklistId;  // checklistId 추가
+  final String checklistId;
 
   ChecklistDetailPage({
     required this.title,
     required this.inspection,
-    required this.checklistId,  // checklistId를 받도록 추가
+    required this.checklistId,
   });
 
   @override
@@ -22,7 +22,10 @@ class ChecklistDetailPage extends StatefulWidget {
 class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
   final ImagePicker _picker = ImagePicker();
   List<File> _selectedImages = [];
-  late Future<List<ChecklistItem>> checklistItemsFuture; // checklistItems를 Future로 관리
+  late Future<List<ChecklistItem>> checklistItemsFuture;
+
+  // 각 항목마다 텍스트 필드를 관리할 컨트롤러를 선언
+  Map<int, TextEditingController> _controllers = {};
 
   Future<void> _pickImage() async {
     final XFile? pickedFile = await _picker.pickImage(source: ImageSource.camera);
@@ -40,27 +43,77 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
   }
 
   Future<List<ChecklistItem>> _fetchChecklistItems() async {
-    // Firestore에서 체크리스트 템플릿 데이터를 가져오는 부분
     QuerySnapshot snapshot = await FirebaseFirestore.instance
         .collection('checklist')
-        .doc(widget.checklistId)  // 실제 checklistId를 사용
+        .doc(widget.checklistId)
         .collection('template')
+        .orderBy('check_seq') // check_seq를 기준으로 오름차순 정렬
         .get();
 
     List<ChecklistItem> items = snapshot.docs.map((doc) {
       return ChecklistItem(
-        number: doc['check_seq'], // check_seq를 number로 사용
-        question: doc['check_contents'], // check_contents를 question으로 사용
+        number: doc['check_seq'],  // check_seq 값 사용
+        question: doc['check_contents'],
+        checkDetail: doc['check_detail'] ?? '적합',
+        actnContents: doc['actn_contents'] ?? '',
       );
     }).toList();
 
+    // 각 항목마다 텍스트 필드를 관리할 컨트롤러 초기화
+    for (var item in items) {
+      _controllers[item.number] = TextEditingController(text: item.actnContents);
+    }
+
     return items;
+  }
+
+  Future<void> _saveChecklistItem(ChecklistItem item) async {
+    try {
+      // `check_seq - 1`을 사용하여 문서 ID로 저장
+      await FirebaseFirestore.instance
+          .collection('checklist')
+          .doc(widget.checklistId)
+          .collection('template')
+          .doc((item.number - 1).toString()) // check_seq에서 1을 빼서 문서 ID로 사용
+          .update({
+        'check_detail': item.checkDetail,
+        'actn_contents': item.actnContents ?? '',
+      });
+
+      // 성공적으로 저장된 후 메시지 출력
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('부적합 사유가 저장되었습니다.')),
+      );
+    } catch (e) {
+      print("문서 업데이트 실패: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('문서 업데이트 실패: $e')),
+      );
+    }
+  }
+
+  Future<void> _completeInspection() async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('checklist')
+          .doc(widget.checklistId)
+          .update({'check_yn': '점검'});
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('점검이 완료되었습니다.')),
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      print("점검 완료 업데이트 실패: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('점검 완료 업데이트 실패: $e')),
+      );
+    }
   }
 
   @override
   void initState() {
     super.initState();
-    checklistItemsFuture = _fetchChecklistItems(); // checklistItems 데이터 비동기적으로 가져오기
+    checklistItemsFuture = _fetchChecklistItems();
   }
 
   @override
@@ -89,13 +142,11 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
             return Center(child: Text('템플릿 데이터가 없습니다.'));
           }
 
-          // Firestore에서 받아온 checklist 항목들
           final checklistItems = snapshot.data!;
 
           return ListView(
             padding: const EdgeInsets.all(16.0),
             children: [
-              // 점검표 정보 섹션 추가
               Card(
                 color: Colors.white,
                 margin: EdgeInsets.only(bottom: 16.0),
@@ -107,18 +158,18 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center, // 모든 요소를 가운데 정렬
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Text(
                         widget.title,
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center, // 텍스트 가운데 정렬
+                        textAlign: TextAlign.center,
                       ),
                       SizedBox(height: 8),
                       Text(
                         '일시: $today',
                         style: TextStyle(fontSize: 16),
-                        textAlign: TextAlign.center, // 텍스트 가운데 정렬
+                        textAlign: TextAlign.center,
                       ),
                       SizedBox(height: 8),
                       Container(
@@ -138,14 +189,13 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
                             color: widget.inspection ? Colors.blueAccent : Colors.redAccent,
                             fontWeight: FontWeight.bold,
                           ),
-                          textAlign: TextAlign.center, // 텍스트 가운데 정렬
+                          textAlign: TextAlign.center,
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-              // 체크리스트 항목들
               ...checklistItems.map((item) {
                 return Card(
                   color: Colors.grey.shade100,
@@ -166,11 +216,16 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
                               child: RadioListTile(
                                 title: Text(option),
                                 value: option,
-                                groupValue: item.selectedOption,
+                                groupValue: item.checkDetail,
                                 onChanged: (value) {
                                   setState(() {
-                                    item.selectedOption = value;
+                                    item.checkDetail = value;
                                   });
+                                  // 라디오 버튼을 선택할 때마다 "부적합 사유가 저장되었습니다." 메시지가 출력되지 않도록 수정
+                                  if (item.checkDetail != '부적합') {
+                                    // 부적합이 아닌 경우 메시지 출력하지 않음
+                                    return;
+                                  }
                                 },
                               ),
                             );
@@ -200,9 +255,6 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
                                           margin: EdgeInsets.only(right: 16),
                                           width: 100,
                                           height: 100,
-                                          decoration: BoxDecoration(
-                                            border: Border.all(color: Colors.grey),
-                                          ),
                                           child: Image.file(
                                             _selectedImages[index],
                                             fit: BoxFit.cover,
@@ -230,19 +282,40 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
                             ),
                           ],
                         ),
-                        if (item.selectedOption == '부적합') ...[
-                          SizedBox(height: 16),
-                          Text('부적합 사유:', style: TextStyle(fontSize: 16)),
-                          TextField(
-                            maxLines: 3,
-                            decoration: InputDecoration(
-                              hintText: '부적합 사유를 작성해주세요.',
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.all(8.0),
-                            ),
+                        if (item.checkDetail == '부적합')
+                          Column(
+                            children: [
+                              TextField(
+                                controller: _controllers[item.number],
+                                decoration: InputDecoration(
+                                  hintText: '부적합 사유를 작성해주세요.',
+                                  border: OutlineInputBorder(),
+                                  contentPadding: EdgeInsets.all(8.0),
+                                ),
+                                onChanged: (value) {
+                                  setState(() {
+                                    item.actnContents = value;
+                                  });
+                                },
+                              ),
+                              SizedBox(height: 8),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blueAccent,
+                                  foregroundColor: Colors.white,
+                                  padding: EdgeInsets.symmetric(vertical: 12.0, horizontal: 24.0),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12.0),
+                                  ),
+                                  elevation: 5,
+                                ),
+                                onPressed: () {
+                                  _saveChecklistItem(item);
+                                },
+                                child: Text('부적합 사유 저장'),
+                              ),
+                            ],
                           ),
-                          SizedBox(height: 16),
-                        ],
                       ],
                     ),
                   ),
@@ -252,7 +325,6 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
           );
         },
       ),
-      // 작성완료 버튼을 하단에 고정
       bottomNavigationBar: widget.inspection == false
           ? Padding(
         padding: const EdgeInsets.all(16.0),
@@ -265,28 +337,27 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
               borderRadius: BorderRadius.circular(8.0),
             ),
           ),
-          onPressed: () {
-            print("점검 완료 버튼 클릭됨");
-          },
+          onPressed: _completeInspection,
           child: Text('점검 완료', style: TextStyle(fontSize: 18)),
         ),
       )
-          : null, // inspection이 true일 때는 bottomNavigationBar가 없음
+          : null,
     );
   }
 }
 
-// 체크리스트 데이터 모델 정의
 class ChecklistItem {
   final int number;
   final String question;
   final List<String> options;
-  String? selectedOption;
+  String? checkDetail;
+  String? actnContents;
 
   ChecklistItem({
     required this.number,
     required this.question,
     this.options = const ['적합', '부적합'],
-    this.selectedOption,
+    this.checkDetail,
+    this.actnContents,
   });
 }

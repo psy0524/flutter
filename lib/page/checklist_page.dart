@@ -39,7 +39,7 @@ class _ChecklistPageState extends State<ChecklistPage> {
         .snapshots()
         .listen((snapshot) {
       int total = snapshot.docs.length;
-      int inspected = snapshot.docs.where((doc) => doc['check_yn'] == '점검됨').length;
+      int inspected = snapshot.docs.where((doc) => doc['check_yn'] == '점검').length;
       setState(() {
         totalItems = total;
         inspectedItems = inspected;
@@ -139,7 +139,7 @@ class _ChecklistPageState extends State<ChecklistPage> {
                       return _buildChecklistItem(
                         checklist['checklist_nm'],
                         checklist['check_cycle_nm'],
-                        checklist['check_yn'] == '점검됨',
+                        checklist['check_yn'] == '점검',
                         checklistId, // checklistId 전달
                       );
                     },
