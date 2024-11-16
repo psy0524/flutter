@@ -21,25 +21,28 @@ class ChecklistDetailPage extends StatefulWidget {
 
 class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
   final ImagePicker _picker = ImagePicker();
-  List<File> _selectedImages = [];
   late Future<List<ChecklistItem>> checklistItemsFuture;
 
   // 각 항목마다 텍스트 필드를 관리할 컨트롤러를 선언
   Map<int, TextEditingController> _controllers = {};
   Map<int, String> _checkDetails = {}; // 각 항목의 라디오 버튼 선택 상태를 관리
+  Map<int, List<File>> _selectedImagesMap = {};  // 각 항목의 이미지를 저장할 Map
 
-  Future<void> _pickImage() async {
+  Future<void> _pickImage(ChecklistItem item) async {
     final XFile? pickedFile = await _picker.pickImage(source: ImageSource.camera);
     if (pickedFile != null) {
       setState(() {
-        _selectedImages.add(File(pickedFile.path));
+        if (!_selectedImagesMap.containsKey(item.number)) {
+          _selectedImagesMap[item.number] = [];
+        }
+        _selectedImagesMap[item.number]!.add(File(pickedFile.path));  // 해당 항목에 이미지를 추가
       });
     }
   }
 
-  void _removeImage(int index) {
+  void _removeImage(ChecklistItem item, int index) {
     setState(() {
-      _selectedImages.removeAt(index);
+      _selectedImagesMap[item.number]!.removeAt(index);  // 해당 항목에서 이미지를 삭제
     });
   }
 
@@ -64,6 +67,7 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
     for (var item in items) {
       _controllers[item.number] = TextEditingController(text: item.actnContents);
       _checkDetails[item.number] = item.checkDetail; // 초기 선택 상태 저장
+      _selectedImagesMap[item.number] = [];  // 각 항목마다 이미지 리스트 초기화
     }
 
     return items;
@@ -94,7 +98,7 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
       await FirebaseFirestore.instance
           .collection('checklist')
           .doc(widget.checklistId)
-          .update({'check_yn': '점검'});
+          .update({'check_yn': '점검'});  // 점검 완료 업데이트
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('점검이 완료되었습니다.')),
       );
@@ -108,7 +112,6 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
   }
 
   bool _isAllItemsChecked() {
-    // 모든 항목이 '적합' 또는 '부적합'으로 체크되었는지 확인
     return _checkDetails.values.every((value) => value == '적합' || value == '부적합');
   }
 
@@ -239,7 +242,7 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
                         Row(
                           children: [
                             GestureDetector(
-                              onTap: _pickImage,
+                              onTap: () => _pickImage(item),
                               child: Container(
                                 width: 100,
                                 height: 100,
@@ -252,7 +255,7 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
                               child: SingleChildScrollView(
                                 scrollDirection: Axis.horizontal,
                                 child: Row(
-                                  children: List.generate(_selectedImages.length, (index) {
+                                  children: List.generate(_selectedImagesMap[item.number]!.length, (index) {
                                     return Stack(
                                       children: [
                                         Container(
@@ -260,7 +263,7 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
                                           width: 100,
                                           height: 100,
                                           child: Image.file(
-                                            _selectedImages[index],
+                                            _selectedImagesMap[item.number]![index],
                                             fit: BoxFit.cover,
                                           ),
                                         ),
@@ -268,7 +271,7 @@ class _ChecklistDetailPageState extends State<ChecklistDetailPage> {
                                           top: 4,
                                           right: 4,
                                           child: GestureDetector(
-                                            onTap: () => _removeImage(index),
+                                            onTap: () => _removeImage(item, index),
                                             child: Icon(Icons.remove_circle, color: Colors.red, size: 24),
                                           ),
                                         ),
