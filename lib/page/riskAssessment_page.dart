@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:untitled/page/riskDetail_page.dart';
 import 'package:untitled/page/riskRegistration_page.dart';
 
@@ -22,20 +23,48 @@ class _RiskAssessmentPageState extends State<RiskAssessmentPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            //위험성 평가 목록
+            // 위험성 평가 목록
             Expanded(
-              child: ListView(
-                children: [
-                  _buildRiskAssessmentItem('(주)데모', '원재료 입고', '보건의료관', '수시', '2024-10-30', '강영미', false),
-                  _buildRiskAssessmentItem('(주)데모', '정육원 보관', '본관', '최초', '2024-08-28', '박상영', true),
-                  _buildRiskAssessmentItem('(주)데모', '지게차 입출고', '인문관', '정기', '2024-06-28', '유선호', false),
-                ],
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection('RiskLevel3').snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return Center(child: Text('오류: ${snapshot.error}'));
+                  }
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return Center(child: Text("데이터가 없습니다."));
+                  }
+
+                  // Firestore 데이터를 리스트로 변환
+                  final riskItems = snapshot.data!.docs;
+
+                  return ListView.builder(
+                    itemCount: riskItems.length,
+                    itemBuilder: (context, index) {
+                      final riskData = riskItems[index];
+                      // status가 "1"이면 대기, "2"이면 결재
+                      bool isInspection = riskData['status'] == '2'; // 결재 여부 체크
+
+                      return _buildRiskAssessmentItem(
+                        riskData['scene_nm'],       // company
+                        riskData['eval_trgt_nm'],  // title
+                        riskData['place_nm'],      // workplace
+                        riskData['eval_type_nm'],  // type
+                        riskData['wrt_date'],      // date
+                        riskData['evaluators'],    // name
+                        isInspection,              // inspection: status가 "2"일 때 결재, 아니면 대기
+                      );
+                    },
+                  );
+                },
               ),
             ),
           ],
         ),
       ),
-
       // 하단에 등록 버튼 구현
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -55,10 +84,10 @@ class _RiskAssessmentPageState extends State<RiskAssessmentPage> {
             );
           },
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.center, // 가운데 정렬
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.library_add, size: 24), // 추가 아이콘
-              SizedBox(width: 8), // 텍스트와 아이콘 사이의 간격
+              Icon(Icons.library_add, size: 24),
+              SizedBox(width: 8),
               Text(
                 '위험성 평가',
                 style: TextStyle(fontSize: 18),
@@ -67,12 +96,18 @@ class _RiskAssessmentPageState extends State<RiskAssessmentPage> {
           ),
         ),
       ),
-
-
     );
   }
 
-  Widget _buildRiskAssessmentItem(String company, String title, String workplace, String type, String date, String name, bool inspection) {
+  Widget _buildRiskAssessmentItem(
+      String company,
+      String title,
+      String workplace,
+      String type,
+      String date,
+      String name,
+      bool inspection,
+      ) {
     return Card(
       color: Colors.grey.shade100,
       elevation: 2.0,
