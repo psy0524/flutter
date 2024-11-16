@@ -47,6 +47,7 @@ class _RiskAssessmentPageState extends State<RiskAssessmentPage> {
                       final riskData = riskItems[index];
                       // status가 "1"이면 대기, "2"이면 결재
                       bool isInspection = riskData['status'] == '2'; // 결재 여부 체크
+                      String evalId = riskData['eval_id']; // eval_id 값을 Firestore에서 가져옵니다.
 
                       return _buildRiskAssessmentItem(
                         riskData['scene_nm'],       // company
@@ -56,6 +57,7 @@ class _RiskAssessmentPageState extends State<RiskAssessmentPage> {
                         riskData['wrt_date'],      // date
                         riskData['evaluators'],    // name
                         isInspection,              // inspection: status가 "2"일 때 결재, 아니면 대기
+                        evalId,                    // evalId 전달
                       );
                     },
                   );
@@ -107,6 +109,7 @@ class _RiskAssessmentPageState extends State<RiskAssessmentPage> {
       String date,
       String name,
       bool inspection,
+      String evalId, // evalId 추가
       ) {
     return Card(
       color: Colors.grey.shade100,
@@ -141,6 +144,7 @@ class _RiskAssessmentPageState extends State<RiskAssessmentPage> {
                 date: date,
                 name: name,
                 inspection: inspection,
+                evalId: evalId,  // evalId 전달
               ),
             ),
           );

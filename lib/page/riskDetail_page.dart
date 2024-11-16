@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class RiskDetailPage extends StatefulWidget {
   final String company;
@@ -8,14 +9,44 @@ class RiskDetailPage extends StatefulWidget {
   final String date;
   final String name;
   final bool inspection;
+  final String evalId;  // 추가된 evalId 필드
 
-  RiskDetailPage({required this.company, required this.title, required this.workplace, required this.type, required this.date, required this.name, required this.inspection});
+  RiskDetailPage({
+    required this.company,
+    required this.title,
+    required this.workplace,
+    required this.type,
+    required this.date,
+    required this.name,
+    required this.inspection,
+    required this.evalId,  // evalId 전달
+  });
 
   @override
   _RiskDetailPageState createState() => _RiskDetailPageState();
 }
 
 class _RiskDetailPageState extends State<RiskDetailPage> {
+  // Firestore에서 데이터를 불러오는 함수
+  Future<List<RiskItem>> _getRiskItemsFromFirestore() async {
+    QuerySnapshot snapshot = await FirebaseFirestore.instance
+        .collection('riskLevel3Detail')
+        .where('eval_id', isEqualTo: widget.evalId)  // evalId 필터링
+        .get();
+
+    return snapshot.docs.map((doc) {
+      return RiskItem.fromFirestore(doc);
+    }).toList();
+  }
+
+  // Firestore에 데이터를 업데이트하는 함수
+  Future<void> _updateRiskGrade(RiskItem item, String grade) async {
+    await FirebaseFirestore.instance
+        .collection('riskLevel3Detail')
+        .doc(item.id)  // Firestore 문서 ID
+        .update({'risk_grade_nm': grade});
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -28,7 +59,7 @@ class _RiskDetailPageState extends State<RiskDetailPage> {
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          // 위험성평가 정보 섹션 추가
+          // 위험성평가 정보 섹션
           Card(
             color: Colors.white,
             margin: EdgeInsets.only(bottom: 16.0),
@@ -43,7 +74,7 @@ class _RiskDetailPageState extends State<RiskDetailPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween, // 양 끝으로 정렬
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         widget.title,
@@ -54,10 +85,10 @@ class _RiskDetailPageState extends State<RiskDetailPage> {
                         ),
                       ),
                       Container(
-                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8), // 여백 추가로 타원 모양 조정
+                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         decoration: BoxDecoration(
                           color: widget.inspection ? Colors.blueAccent.withOpacity(0.1) : Colors.redAccent.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20), // 타원 모양
+                          borderRadius: BorderRadius.circular(20),
                           border: Border.all(
                             color: widget.inspection ? Colors.blueAccent : Colors.redAccent,
                             width: 1.5,
@@ -87,90 +118,103 @@ class _RiskDetailPageState extends State<RiskDetailPage> {
             ),
           ),
           // 위험성평가 데이터 항목들
-          ...RiskItems.map((item) {
-            return Card(
-              color: Colors.grey.shade100,
-              elevation: 4.0,
-              margin: const EdgeInsets.symmetric(vertical: 8.0),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10.0),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildDetailRow("단위작업", item.unitOperation),
-                    _buildDetailRow("유해.위험요인", item.riskFactor),
-                    Divider(thickness: 1, color: Colors.grey.shade300), // 구분선 추가
-                    SizedBox(height: 16),
-                    Text(
-                      '위험수준: ',
-                      style: TextStyle(fontSize: 16, color: Colors.grey[800]),
-                    ),
-                    Row(
-                      children: item.options.map<Widget>((option) {
-                        return Expanded(
-                          child: RadioListTile(
-                            title: Text(option, style: TextStyle(fontSize: 14)),
-                            value: option,
-                            groupValue: item.selectedOption,
-                            onChanged: (value) {
-                              setState(() {
-                                item.selectedOption = value;
-                              });
-                            },
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    Divider(thickness: 1, color: Colors.grey.shade300), // 구분선 추가
-                    SizedBox(height: 8),
-                    _buildDetailRow("개선 대책", item.measure),
-                    _buildDetailRow("개선 담당자", item.manager),
-                    SizedBox(height: 16),
-
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
+          FutureBuilder<List<RiskItem>>(
+            future: _getRiskItemsFromFirestore(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Center(child: CircularProgressIndicator());
+              } else if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return Center(child: Text('데이터 없음'));
+              } else {
+                List<RiskItem> riskItems = snapshot.data!;
+                return Column(
+                  children: riskItems.map((item) {
+                    return Card(
+                      color: Colors.grey.shade100,
+                      elevation: 4.0,
+                      margin: const EdgeInsets.symmetric(vertical: 8.0),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10.0),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            _buildDetailRow("단위작업", item.unitOperation),
+                            _buildDetailRow("유해.위험요인", item.riskFactor),
+                            Divider(thickness: 1, color: Colors.grey.shade300), // 구분선 추가
+                            SizedBox(height: 16),
                             Text(
-                              '개선 예정일:',
-                              style: TextStyle(fontSize: 14, color: Colors.grey[800]),
+                              '위험수준: ',
+                              style: TextStyle(fontSize: 16, color: Colors.grey[800]),
                             ),
-                            Text(
-                              item.scheduledDate,
-                              style: TextStyle(fontSize: 16, color: Colors.black, fontWeight: FontWeight.bold),
+                            Row(
+                              children: ['상', '중', '하'].map<Widget>((option) {
+                                return Expanded(
+                                  child: RadioListTile<String>(
+                                    title: Text(option, style: TextStyle(fontSize: 14)),
+                                    value: option,
+                                    groupValue: item.risk_grade_nm,  // 선택된 값
+                                    onChanged: (value) {
+                                      setState(() {
+                                        item.risk_grade_nm = value.toString();  // 값 변경
+                                      });
+                                      _updateRiskGrade(item, value.toString());  // Firestore에 업데이트
+                                    },
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                            Divider(thickness: 1, color: Colors.grey.shade300), // 구분선 추가
+                            SizedBox(height: 8),
+                            _buildDetailRow("개선 대책", item.measure),
+                            _buildDetailRow("개선 담당자", item.manager),
+                            SizedBox(height: 16),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '개선 예정일:',
+                                      style: TextStyle(fontSize: 14, color: Colors.grey[800]),
+                                    ),
+                                    Text(
+                                      item.scheduledDate,
+                                      style: TextStyle(fontSize: 16, color: Colors.black, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '개선 완료일:',
+                                      style: TextStyle(fontSize: 14, color: Colors.grey[800]),
+                                    ),
+                                    Text(
+                                      item.completionDate,
+                                      style: TextStyle(fontSize: 16, color: Colors.black, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '개선 완료일:',
-                              style: TextStyle(fontSize: 14, color: Colors.grey[800]),
-                            ),
-                            Text(
-                              item.completionDate,
-                              style: TextStyle(fontSize: 16, color: Colors.black, fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-
+                      ),
+                    );
+                  }).toList(),
+                );
+              }
+            },
+          ),
         ],
       ),
-      // 결재상신 버튼을 하단에 고정
       bottomNavigationBar: widget.inspection == false
           ? Padding(
         padding: const EdgeInsets.all(16.0),
@@ -214,31 +258,38 @@ class _RiskDetailPageState extends State<RiskDetailPage> {
   }
 }
 
-// 위험성평가 데이터 모델 정의
 class RiskItem {
-  final String unitOperation; // 단위작업
-  final String riskFactor; // 위험요인
-  final List<String> options;
-  final String measure; // 개선대책
-  final String scheduledDate; // 개선 예정일
-  final String completionDate; // 개선 완료일
-  final String manager; // 개선 담당자
-  String? selectedOption;
+  final String id;
+  final String unitOperation;
+  final String riskFactor;
+  String risk_grade_nm;  // 위험수준 값
+  final String measure;
+  final String scheduledDate;
+  final String completionDate;
+  final String manager;
 
   RiskItem({
+    required this.id,
     required this.unitOperation,
     required this.riskFactor,
-    this.options = const ['상', '중', '하'],
-    this.selectedOption,
+    required this.risk_grade_nm,
     required this.measure,
     required this.scheduledDate,
     required this.completionDate,
     required this.manager,
   });
-}
 
-// 샘플 데이터 생성
-final List<RiskItem> RiskItems = [
-  RiskItem(unitOperation: '원재료 하차', riskFactor: '지게차 충돌', measure: '신호수 배치', scheduledDate: '2024-10-30', completionDate: '2024-10-30', manager: '강영미'),
-  RiskItem(unitOperation: '재료 입고', riskFactor: '컨배이어밸트 끼임', measure: '안전교육, 장갑 착용', scheduledDate: '2024-10-30', completionDate: '2024-10-30', manager: '강영미'),
-];
+  factory RiskItem.fromFirestore(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    return RiskItem(
+      id: doc.id,
+      unitOperation: data['unit_work'] ?? '',
+      riskFactor: data['risk_fctr'] ?? '',
+      risk_grade_nm: data['risk_grade_nm'] ?? '',
+      measure: data['impr_msrs'] ?? '',
+      scheduledDate: data['impr_due_date'] ?? '',
+      completionDate: data['impr_cmp_date'] ?? '',
+      manager: data['impr_mngr'] ?? '',
+    );
+  }
+}
