@@ -45,7 +45,7 @@ class _RiskRegistrationPageState extends State<RiskRegistrationPage> {
         'eval_trgt_nm': siteName,
         'evaluators': evaluator,
         'status_nm': '등록', // 초기 상태
-        'status': 1, // status 필드를 1로 추가
+        'status': '1', // status 필드를 1로 추가
         'wrt_date': DateFormat('yyyy-MM-dd').format(DateTime.now()),
       });
 

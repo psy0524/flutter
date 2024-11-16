@@ -47,6 +47,30 @@ class _RiskDetailPageState extends State<RiskDetailPage> {
         .update({'risk_grade_nm': grade});
   }
 
+  // Firestore에서 상태를 상신으로 업데이트하는 함수
+  Future<void> _updateStatus() async {
+    try {
+      // evalId로 해당 문서 가져오기 (RiskLevel3 컬렉션)
+      QuerySnapshot snapshot = await FirebaseFirestore.instance
+          .collection('RiskLevel3')
+          .where('eval_id', isEqualTo: widget.evalId)
+          .get();
+
+      // 문서가 존재할 경우 상태 업데이트
+      for (var doc in snapshot.docs) {
+        await FirebaseFirestore.instance
+            .collection('RiskLevel3')
+            .doc(doc.id)  // 해당 문서 ID
+            .update({
+          'status': '2',  // status를 문자열로 업데이트
+          'status_nm': '상신',  // status_nm을 상신으로 업데이트
+        });
+      }
+    } catch (e) {
+      print("Error updating status: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -158,7 +182,9 @@ class _RiskDetailPageState extends State<RiskDetailPage> {
                                     title: Text(option, style: TextStyle(fontSize: 14)),
                                     value: option,
                                     groupValue: item.risk_grade_nm,  // 선택된 값
-                                    onChanged: (value) {
+                                    onChanged: widget.inspection
+                                        ? null  // inspection이 true일 경우 수정 불가
+                                        : (value) {
                                       setState(() {
                                         item.risk_grade_nm = value.toString();  // 값 변경
                                       });
@@ -228,6 +254,8 @@ class _RiskDetailPageState extends State<RiskDetailPage> {
             ),
           ),
           onPressed: () {
+            _updateStatus();  // 상태 업데이트 함수 호출
+            Navigator.pop(context);  // 이전 화면으로 돌아가기
             print("결재 상신 버튼 클릭됨");
           },
           child: Text('결재 상신', style: TextStyle(fontSize: 18)),
