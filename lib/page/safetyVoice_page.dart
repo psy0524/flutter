@@ -198,6 +198,13 @@ class _SafetyVoicePageState extends State<SafetyVoicePage> {
           ),
           onPressed: () {
             // 작성 완료 버튼 클릭 시 동작
+            Navigator.pop(context); // 이전 화면으로 돌아감
+            ScaffoldMessenger.of(context).showSnackBar( // 스낵바로 알림 표시
+              SnackBar(
+                content: Text('작성 완료되었습니다!'),
+                duration: Duration(seconds: 2), // 2초간 표시
+              ),
+            );
           },
           child: Text('작성 완료', style: TextStyle(fontSize: 18)),
         ),

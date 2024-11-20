@@ -46,7 +46,7 @@ class _LoginPageState extends State<LoginPage> {
 
     // 서버로 로그인 요청
     final response = await http.post(
-      Uri.parse('http://localhost:3000/login'), // 로그인 API URL
+      Uri.parse('http://172.30.1.99:3000/login'), // 로그인 API URL
       headers: {'Content-Type': 'application/json'}, // 요청 헤더
       body: json.encode({
         'user_id': userId, // 전송 데이터: 사용자 ID
